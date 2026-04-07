@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bouncing Ball: Energy Conservation</title>
+    <title>Bouncing Ball: Perpetual Energy</title>
     <style>
         body { 
             margin: 0; background: #111; color: white; 
             display: flex; justify-content: center; align-items: center; 
             height: 100vh; overflow: hidden; font-family: sans-serif;
         }
-        canvas { border: 2px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        canvas { border: 2px solid #333; background: #000; }
     </style>
 </head>
 <body>
@@ -25,74 +25,27 @@
 
     const ball = {
         x: canvas.width / 2,
-        y: 80,
+        y: 100,
         radius: 20,
         vy: 0,
         mass: 1,
-        restitution: 0.85, // 15% energy loss per bounce
-        thermalEnergy: 0
+        restitution: 1.0 // 1.0 = Perfect bounce (No energy loss)
     };
 
-    const g = 0.5; // Gravity
+    const g = 0.5; 
     const groundY = canvas.height - ball.radius - 20;
 
-    // Calculate initial mechanical energy for bar scaling
-    const initialHeight = groundY - ball.y;
-    const totalSystemEnergy = ball.mass * g * initialHeight;
-
-    function update() {
-        // --- Velocity Verlet Integration ---
-        
-        // 1. Position update: y = y + v + 0.5 * a
-        ball.y += ball.vy + 0.5 * gravity;
-
-        // 2. Half-step velocity update
-        ball.vy += 0.5 * gravity;
-
-        // 3. Perfect Elastic Collision
-        if (ball.y >= groundY) {
-            ball.y = groundY; // Reset position to prevent sinking
-            ball.vy *= -1;    // Reverse velocity perfectly
-        }
-
-        // 4. Final half-step velocity update
-        ball.vy += 0.5 * gravity;
-
-        draw();
-        calculateEnergy();
-
-        requestAnimationFrame(update);
-    }
-
-    function calculateEnergy() {
-        // Potential Energy (mgh) - inverted because Y increases downwards
-        const height = groundY - ball.y;
-        const pe = ball.mass * gravity * height;
-        
-        // Kinetic Energy (0.5 * m * v^2)
-        const ke = 0.5 * ball.mass * Math.pow(ball.vy, 2);
-        
-        const totalEnergy = pe + ke;
-        energyLabel.innerText = totalEnergy.toFixed(2);
-    }
-
     function animate() {
-        // --- PHYSICS (Velocity Verlet) ---
-        ball.y += ball.vy + 0.5 * g;
-        let vBefore = ball.vy + 0.5 * g;
+        // 1. Apply Gravity to Velocity
+        ball.vy += g;
 
+        // 2. Apply Velocity to Position
+        ball.y += ball.vy;
+
+        // 3. Simple Collision Detection
         if (ball.y >= groundY) {
-            ball.y = groundY;
-            let keBefore = 0.5 * ball.mass * Math.pow(vBefore, 2);
-            
-            // Inelastic Bounce
-            ball.vy = -vBefore * ball.restitution;
-            
-            let keAfter = 0.5 * ball.mass * Math.pow(ball.vy, 2);
-            // Energy lost to floor = Thermal Energy
-            ball.thermalEnergy += (keBefore - keAfter);
-        } else {
-            ball.vy += g;
+            ball.y = groundY;    // Snap to floor so it doesn't fall through
+            ball.vy *= -1;       // Flip velocity perfectly
         }
 
         draw();
@@ -102,47 +55,33 @@
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. Draw Ground
+        // Draw Ground
         ctx.fillStyle = '#444';
         ctx.fillRect(0, groundY + ball.radius, canvas.width, 20);
 
-        // 2. Draw Energy Bars (The "Visual Representation")
+        // Draw Energy Bar (Visualizing Mechanical Energy)
         const barWidth = 400;
         const barX = (canvas.width - barWidth) / 2;
         
-        // Calculate current mechanical energy
-        const currentPE = ball.mass * g * (groundY - ball.y);
-        const currentKE = 0.5 * ball.mass * Math.pow(ball.vy, 2);
-        const currentMech = currentPE + currentKE;
+        // Potential Energy + Kinetic Energy
+        const h = groundY - ball.y;
+        const currentEnergy = (ball.mass * g * h) + (0.5 * ball.mass * Math.pow(ball.vy, 2));
 
-        // Draw Mechanical Bar (Blue)
-        const mechWidth = (currentMech / totalSystemEnergy) * barWidth;
+        // The Bar (Should stay full/consistent)
         ctx.fillStyle = '#3296ff';
-        ctx.fillRect(barX, 30, mechWidth, 20);
-        ctx.fillText("Mechanical Energy", barX, 25);
-
-        // Draw Thermal Bar (Red) - Fills from the right
-        const thermWidth = (ball.thermalEnergy / totalSystemEnergy) * barWidth;
-        ctx.fillStyle = '#ff4d4d';
-        ctx.fillRect(barX + mechWidth, 30, thermWidth, 20);
-        ctx.fillText("Thermal Energy (Heat)", barX + barWidth - 110, 25);
-
-        // Total Energy Label
-        ctx.fillStyle = "#00ff88";
-        ctx.fillText(`Total System Energy: ${(currentMech + ball.thermalEnergy).toFixed(1)} J`, barX, 70);
-
-        // 3. Draw Ball
-        // Color shifts from Blue to Red as it heats up
-        const heatRatio = Math.min(ball.thermalEnergy / totalSystemEnergy, 1);
-        const r = Math.floor(50 + (205 * heatRatio));
-        const b = Math.floor(255 - (205 * heatRatio));
+        ctx.fillRect(barX, 40, barWidth, 20);
         
+        ctx.fillStyle = "white";
+        ctx.fillText("Conserved Mechanical Energy", barX, 35);
+        ctx.fillText(`Total: ${Math.abs(currentEnergy).toFixed(0)} units`, barX, 75);
+
+        // Draw Ball
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgb(${r}, 120, ${b})`;
+        ctx.fillStyle = '#3296ff';
         ctx.fill();
-        ctx.lineWidth = 3;
         ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
         ctx.stroke();
         ctx.closePath();
     }

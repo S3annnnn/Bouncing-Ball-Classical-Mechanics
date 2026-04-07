@@ -2,83 +2,127 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bouncing Ball: Perpetual Energy</title>
+    <title>Bouncing Ball Simulation</title>
     <style>
         body { 
             margin: 0; background: #111; color: white; 
-            display: flex; justify-content: center; align-items: center; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
             height: 100vh; overflow: hidden; font-family: sans-serif;
         }
-        canvas { border: 2px solid #333; background: #000; }
+        .container { position: relative; }
+        canvas { border: 2px solid #333; background: #000; border-radius: 8px; }
+        .ui-overlay {
+            position: absolute; top: 20px; right: 20px; width: 220px;
+            background: rgba(40, 40, 40, 0.9); padding: 15px; border-radius: 8px;
+            pointer-events: none; border: 1px solid #444;
+        }
+        .bar-bg { background: #222; height: 12px; border-radius: 6px; margin: 8px 0 15px 0; overflow: hidden; }
+        #mechBar { background: #3296ff; height: 100%; width: 100%; transition: width 0.1s; }
+        #thermBar { background: #ff4d4d; height: 100%; width: 0%; transition: width 0.1s; }
+        .energy-text { font-size: 12px; display: flex; justify-content: space-between; }
+        .total-text { text-align: center; color: #00ff88; font-weight: bold; margin-top: 10px; border-top: 1px solid #444; padding-top: 10px; }
     </style>
 </head>
 <body>
 
-<canvas id="canvas"></canvas>
+    <div class="container">
+        <canvas id="canvas"></canvas>
+        
+        <div class="ui-overlay">
+            <div class="energy-text"><span>Mechanical</span><span id="mechVal">0</span></div>
+            <div class="bar-bg"><div id="mechBar"></div></div>
+            
+            <div class="energy-text"><span>Thermal (Heat)</span><span id="thermVal">0</span></div>
+            <div class="bar-bg"><div id="thermBar"></div></div>
+            
+            <div class="total-text">System Total: <span id="totalVal">0</span></div>
+        </div>
+    </div>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-
-    canvas.width = 600;
+    
+    // Scale for high-DPI screens
+    canvas.width = 700;
     canvas.height = 500;
 
     const ball = {
         x: canvas.width / 2,
         y: 100,
-        radius: 20,
         vy: 0,
+        radius: 20,
         mass: 1,
-        restitution: 1.0 // 1.0 = Perfect bounce (No energy loss)
+        restitution: 0.8, // Change to 1.0 for perpetual bouncing
+        thermal: 0
     };
 
-    const g = 0.5; 
+    const g = 0.5; // Gravity
     const groundY = canvas.height - ball.radius - 20;
+    
+    // Calculate max potential energy for bar scaling
+    const initialHeight = groundY - 100;
+    const initialTotal = ball.mass * g * initialHeight;
 
     function animate() {
-        // 1. Apply Gravity to Velocity
-        ball.vy += g;
+        // --- Physics: Velocity Verlet ---
+        // 1. Position Step
+        ball.y += ball.vy + 0.5 * g;
+        
+        // 2. Predict Velocity
+        let vNext = ball.vy + 0.5 * g;
 
-        // 2. Apply Velocity to Position
-        ball.y += ball.vy;
-
-        // 3. Simple Collision Detection
+        // 3. Collision Logic
         if (ball.y >= groundY) {
-            ball.y = groundY;    // Snap to floor so it doesn't fall through
-            ball.vy *= -1;       // Flip velocity perfectly
+            ball.y = groundY;
+            
+            // Energy Math
+            let keBefore = 0.5 * ball.mass * (vNext * vNext);
+            ball.vy = -vNext * ball.restitution;
+            let keAfter = 0.5 * ball.mass * (ball.vy * ball.vy);
+            
+            // Add lost KE to Thermal Energy
+            ball.thermal += (keBefore - keAfter);
+        } else {
+            ball.vy += g;
         }
 
-        draw();
+        render();
+        updateUI();
         requestAnimationFrame(animate);
     }
 
-    function draw() {
+    function updateUI() {
+        const pe = ball.mass * g * (groundY - ball.y);
+        const ke = 0.5 * ball.mass * (ball.vy * ball.vy);
+        const mech = pe + ke;
+        const total = mech + ball.thermal;
+
+        document.getElementById('mechVal').innerText = mech.toFixed(0);
+        document.getElementById('thermVal').innerText = ball.thermal.toFixed(0);
+        document.getElementById('totalVal').innerText = total.toFixed(0);
+
+        // Update bar widths
+        document.getElementById('mechBar').style.width = (mech / total * 100) + "%";
+        document.getElementById('thermBar').style.width = (ball.thermal / total * 100) + "%";
+    }
+
+    function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw Ground
-        ctx.fillStyle = '#444';
+        // Ground
+        ctx.fillStyle = '#333';
         ctx.fillRect(0, groundY + ball.radius, canvas.width, 20);
 
-        // Draw Energy Bar (Visualizing Mechanical Energy)
-        const barWidth = 400;
-        const barX = (canvas.width - barWidth) / 2;
-        
-        // Potential Energy + Kinetic Energy
-        const h = groundY - ball.y;
-        const currentEnergy = (ball.mass * g * h) + (0.5 * ball.mass * Math.pow(ball.vy, 2));
+        // Ball Color Shift (Blue to Red)
+        const totalE = (ball.mass * g * (groundY - ball.y)) + (0.5 * ball.mass * ball.vy**2) + ball.thermal;
+        const heatRatio = ball.thermal / totalE;
+        const r = Math.floor(50 + (205 * heatRatio));
+        const b = Math.floor(255 - (205 * heatRatio));
 
-        // The Bar (Should stay full/consistent)
-        ctx.fillStyle = '#3296ff';
-        ctx.fillRect(barX, 40, barWidth, 20);
-        
-        ctx.fillStyle = "white";
-        ctx.fillText("Conserved Mechanical Energy", barX, 35);
-        ctx.fillText(`Total: ${Math.abs(currentEnergy).toFixed(0)} units`, barX, 75);
-
-        // Draw Ball
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#3296ff';
+        ctx.fillStyle = `rgb(${r}, 120, ${b})`;
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;

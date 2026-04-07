@@ -40,6 +40,42 @@
     const initialHeight = groundY - ball.y;
     const totalSystemEnergy = ball.mass * g * initialHeight;
 
+    function update() {
+        // --- Velocity Verlet Integration ---
+        
+        // 1. Position update: y = y + v + 0.5 * a
+        ball.y += ball.vy + 0.5 * gravity;
+
+        // 2. Half-step velocity update
+        ball.vy += 0.5 * gravity;
+
+        // 3. Perfect Elastic Collision
+        if (ball.y >= groundY) {
+            ball.y = groundY; // Reset position to prevent sinking
+            ball.vy *= -1;    // Reverse velocity perfectly
+        }
+
+        // 4. Final half-step velocity update
+        ball.vy += 0.5 * gravity;
+
+        draw();
+        calculateEnergy();
+
+        requestAnimationFrame(update);
+    }
+
+    function calculateEnergy() {
+        // Potential Energy (mgh) - inverted because Y increases downwards
+        const height = groundY - ball.y;
+        const pe = ball.mass * gravity * height;
+        
+        // Kinetic Energy (0.5 * m * v^2)
+        const ke = 0.5 * ball.mass * Math.pow(ball.vy, 2);
+        
+        const totalEnergy = pe + ke;
+        energyLabel.innerText = totalEnergy.toFixed(2);
+    }
+
     function animate() {
         // --- PHYSICS (Velocity Verlet) ---
         ball.y += ball.vy + 0.5 * g;

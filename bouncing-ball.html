@@ -98,9 +98,6 @@
         const mech = pe + ke;
         const total = mech + ball.thermal;
 
-        if (total >= 180) {
-            total = 180;
-
         document.getElementById('mechVal').innerText = mech.toFixed(0);
         document.getElementById('thermVal').innerText = ball.thermal.toFixed(0);
         document.getElementById('totalVal').innerText = total.toFixed(0);

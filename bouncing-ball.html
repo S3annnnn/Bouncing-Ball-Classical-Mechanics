@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bouncing Ball: Dual Energy Cap</title>
+    <title>Bouncing Ball: Energy Explorer (Fixed)</title>
     <style>
         body { 
             margin: 0; background: #111; color: white; 
@@ -13,7 +13,7 @@
         canvas { border: 2px solid #333; background: #000; border-radius: 8px; }
         
         .controls {
-            width: 260px; background: rgba(40, 40, 40, 0.9); 
+            width: 250px; background: rgba(40, 40, 40, 0.9); 
             padding: 20px; border-radius: 8px; border: 1px solid #444;
         }
         
@@ -21,24 +21,21 @@
         label { display: block; font-size: 14px; margin-bottom: 8px; color: #ccc; }
         input[type="range"] { width: 100%; cursor: pointer; }
         
-        .bar-bg { background: #222; height: 12px; border-radius: 6px; margin: 8px 0 15px 0; overflow: hidden; position: relative; }
-        #mechBar { background: #3296ff; height: 100%; width: 100%; }
-        #thermBar { background: #ff4d4d; height: 100%; width: 0%; }
-        /* Visual marker for the thermal cap */
-        .cap-marker { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: white; opacity: 0.5; }
+        .bar-bg { background: #222; height: 12px; border-radius: 6px; margin: 8px 0 15px 0; overflow: hidden; }
+        #mechBar { background: #3296ff; height: 100%; width: 100%; transition: width 0.1s; }
+        #thermBar { background: #ff4d4d; height: 100%; width: 0%; transition: width 0.1s; }
         
         .energy-text { font-size: 13px; display: flex; justify-content: space-between; margin-bottom: 4px; }
         .total-text { 
             text-align: center; color: #00ff88; font-weight: bold; 
             margin-top: 15px; border-top: 1px solid #555; padding-top: 15px; 
         }
-        .warning { color: #ffcc00; font-size: 11px; margin-top: 5px; text-align: center; display: none; }
-        
         button {
-            width: 100%; padding: 10px; background: #444; color: white;
+            width: 100%; padding: 10px; background: #3296ff; color: white;
             border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;
+            font-weight: bold;
         }
-        button:hover { background: #555; }
+        button:hover { background: #2670c4; }
     </style>
 </head>
 <body>
@@ -47,7 +44,7 @@
         <canvas id="canvas"></canvas>
         
         <div class="controls">
-            <h3 style="margin-top:0; color: #3296ff;">System Controls</h3>
+            <h3 style="margin-top:0; color: #3296ff;">Simulation Settings</h3>
             
             <div class="control-group">
                 <label>Drop Height: <span id="hLabel">300</span>px</label>
@@ -55,24 +52,20 @@
             </div>
 
             <div class="control-group">
-                <label>Elasticity: <span id="eLabel">0.80</span></label>
-                <input type="range" id="eSlider" min="0" max="1" step="0.01" value="0.80">
+                <label>Elasticity: <span id="eLabel">0.85</span></label>
+                <input type="range" id="eSlider" min="0" max="1" step="0.01" value="0.85">
             </div>
 
-            <button onclick="resetBall()">Reset Simulation</button>
+            <button onclick="resetBall()">Drop New Ball</button>
 
-            <div class="total-text">Total Energy Cap: 180 J</div>
+            <div class="total-text">System Energy Cap: 180 J</div>
             
             <div style="margin-top:20px">
                 <div class="energy-text"><span>Mechanical</span><span id="mechVal">0</span></div>
                 <div class="bar-bg"><div id="mechBar"></div></div>
                 
-                <div class="energy-text"><span>Thermal (Cap: 100 J)</span><span id="thermVal">0</span></div>
-                <div class="bar-bg">
-                    <div id="thermBar"></div>
-                    <div class="cap-marker"></div>
-                </div>
-                <div id="capWarning" class="warning">THERMAL CAP REACHED</div>
+                <div class="energy-text"><span>Thermal</span><span id="thermVal">0</span></div>
+                <div class="bar-bg"><div id="thermBar"></div></div>
             </div>
         </div>
     </div>
@@ -87,21 +80,20 @@
     const eSlider = document.getElementById('eSlider');
     const hLabel = document.getElementById('hLabel');
     const eLabel = document.getElementById('eLabel');
-    const capWarning = document.getElementById('capWarning');
 
-    const TOTAL_ENERGY_CAP = 180;
-    const THERMAL_ENERGY_CAP = 100;
+    const ENERGY_CAP = 180;
     const g = 0.5; 
     const groundY = canvas.height - 40;
 
     let ball = {
         x: canvas.width / 2,
-        y: 100,
+        y: groundY - 300,
         vy: 0,
         radius: 18,
         thermal: 0,
-        restitution: 0.8,
-        mass: 1
+        restitution: 0.85,
+        mass: 1,
+        isAtRest: false
     };
 
     function resetBall() {
@@ -110,16 +102,94 @@
         ball.vy = 0;
         ball.thermal = 0;
         ball.restitution = parseFloat(eSlider.value);
+        ball.isAtRest = false;
         
-        // Adjust mass so PE = 180 J
-        ball.mass = TOTAL_ENERGY_CAP / (g * dropHeight);
+        // m = Total Energy / (g * height)
+        ball.mass = ENERGY_CAP / (g * dropHeight);
         
         hLabel.innerText = dropHeight;
         eLabel.innerText = ball.restitution;
-        capWarning.style.display = "none";
     }
 
     function animate() {
-        // Position Step
-        ball.y += ball.vy + 0.5 * g;
-        let vNext = ball.vy + 0.5
+        if (!ball.isAtRest) {
+            // Predict movement
+            ball.y += ball.vy + 0.5 * g;
+            let vNext = ball.vy + 0.5 * g;
+
+            // Collision detection
+            if (ball.y >= groundY) {
+                ball.y = groundY;
+                
+                let keBefore = 0.5 * ball.mass * (vNext * vNext);
+                ball.vy = -vNext * ball.restitution;
+                
+                // If velocity is too low after bounce, stop the simulation
+                // and snap thermal to the max cap.
+                if (Math.abs(ball.vy) < 0.5) {
+                    ball.vy = 0;
+                    ball.thermal = ENERGY_CAP;
+                    ball.isAtRest = true;
+                } else {
+                    let keAfter = 0.5 * ball.mass * (ball.vy * ball.vy);
+                    ball.thermal += (keBefore - keAfter);
+                }
+            } else {
+                ball.vy += g;
+            }
+
+            // Guard against floating point drift
+            if (ball.thermal > ENERGY_CAP) ball.thermal = ENERGY_CAP;
+        }
+
+        render();
+        updateUI();
+        requestAnimationFrame(animate);
+    }
+
+    function updateUI() {
+        // Calculate PE and KE for UI
+        const pe = Math.max(0, ball.mass * g * (groundY - ball.y));
+        const ke = 0.5 * ball.mass * (ball.vy * ball.vy);
+        
+        // Total Mechanical Energy
+        let mech = ball.isAtRest ? 0 : pe + ke;
+        
+        // Update Text
+        document.getElementById('mechVal').innerText = mech.toFixed(1);
+        document.getElementById('thermVal').innerText = ball.thermal.toFixed(1);
+        
+        // Update Bars
+        document.getElementById('mechBar').style.width = (mech / ENERGY_CAP * 100) + "%";
+        document.getElementById('thermBar').style.width = (ball.thermal / ENERGY_CAP * 100) + "%";
+        
+        hLabel.innerText = hSlider.value;
+        eLabel.innerText = eSlider.value;
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Ground
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, groundY + ball.radius, canvas.width, 20);
+
+        // Ball Color based on heat (Cold Blue to Hot Red)
+        const heatRatio = Math.min(ball.thermal / ENERGY_CAP, 1);
+        const r = Math.floor(50 + (205 * heatRatio));
+        const b = Math.floor(255 - (205 * heatRatio));
+
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${r}, 120, ${b})`;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    resetBall(); 
+    animate();
+</script>
+</body>
+</html>

@@ -2,87 +2,124 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bouncing Ball Simulation</title>
+    <title>Bouncing Ball: Energy Explorer</title>
     <style>
         body { 
             margin: 0; background: #111; color: white; 
             display: flex; flex-direction: column; justify-content: center; align-items: center; 
             height: 100vh; overflow: hidden; font-family: sans-serif;
         }
-        .container { position: relative; }
+        .main-layout { display: flex; gap: 20px; align-items: flex-start; }
         canvas { border: 2px solid #333; background: #000; border-radius: 8px; }
-        .ui-overlay {
-            position: absolute; top: 20px; right: 20px; width: 220px;
-            background: rgba(40, 40, 40, 0.9); padding: 15px; border-radius: 8px;
-            pointer-events: none; border: 1px solid #444;
+        
+        .controls {
+            width: 250px; background: rgba(40, 40, 40, 0.9); 
+            padding: 20px; border-radius: 8px; border: 1px solid #444;
         }
+        
+        .control-group { margin-bottom: 20px; }
+        label { display: block; font-size: 14px; margin-bottom: 8px; color: #ccc; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        
         .bar-bg { background: #222; height: 12px; border-radius: 6px; margin: 8px 0 15px 0; overflow: hidden; }
-        #mechBar { background: #3296ff; height: 100%; width: 100%; transition: width 0.1s; }
-        #thermBar { background: #ff4d4d; height: 100%; width: 0%; transition: width 0.1s; }
-        .energy-text { font-size: 12px; display: flex; justify-content: space-between; }
-        .total-text { text-align: center; color: #00ff88; font-weight: bold; margin-top: 10px; border-top: 1px solid #444; padding-top: 10px; }
+        #mechBar { background: #3296ff; height: 100%; width: 100%; }
+        #thermBar { background: #ff4d4d; height: 100%; width: 0%; }
+        
+        .energy-text { font-size: 13px; display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .total-text { 
+            text-align: center; color: #00ff88; font-weight: bold; 
+            margin-top: 15px; border-top: 1px solid #555; padding-top: 15px; 
+        }
+        button {
+            width: 100%; padding: 10px; background: #444; color: white;
+            border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;
+        }
+        button:hover { background: #555; }
     </style>
 </head>
 <body>
 
-    <div class="container">
+    <div class="main-layout">
         <canvas id="canvas"></canvas>
         
-        <div class="ui-overlay">
-            <div class="energy-text"><span>Mechanical</span><span id="mechVal">0</span></div>
-            <div class="bar-bg"><div id="mechBar"></div></div>
+        <div class="controls">
+            <h3 style="margin-top:0; color: #3296ff;">Simulation Settings</h3>
             
-            <div class="energy-text"><span>Thermal (Heat)</span><span id="thermVal">0</span></div>
-            <div class="bar-bg"><div id="thermBar"></div></div>
+            <div class="control-group">
+                <label>Drop Height: <span id="hLabel">300</span>px</label>
+                <input type="range" id="hSlider" min="50" max="400" value="300">
+            </div>
+
+            <div class="control-group">
+                <label>Elasticity: <span id="eLabel">0.85</span></label>
+                <input type="range" id="eSlider" min="0" max="1" step="0.01" value="0.85">
+            </div>
+
+            <button onclick="resetBall()">Drop New Ball</button>
+
+            <div class="total-text">System Energy Cap: 180 J</div>
             
-            <div class="total-text">System Total: <span id="totalVal">0</span></div>
+            <div style="margin-top:20px">
+                <div class="energy-text"><span>Mechanical</span><span id="mechVal">0</span></div>
+                <div class="bar-bg"><div id="mechBar"></div></div>
+                
+                <div class="energy-text"><span>Thermal</span><span id="thermVal">0</span></div>
+                <div class="bar-bg"><div id="thermBar"></div></div>
+            </div>
         </div>
     </div>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    
-    // Scale for high-DPI screens
-    canvas.width = 700;
+    canvas.width = 600;
     canvas.height = 500;
 
-    const ball = {
+    const hSlider = document.getElementById('hSlider');
+    const eSlider = document.getElementById('eSlider');
+    const hLabel = document.getElementById('hLabel');
+    const eLabel = document.getElementById('eLabel');
+
+    const ENERGY_CAP = 180;
+    const g = 0.5; 
+    const groundY = canvas.height - 40;
+
+    let ball = {
         x: canvas.width / 2,
-        y: 100,
+        y: groundY - 300,
         vy: 0,
-        radius: 20,
-        mass: 1,
-        restitution: 0.8, // Change to 1.0 for perpetual bouncing
-        thermal: 0
+        radius: 18,
+        thermal: 0,
+        restitution: 0.85,
+        mass: 1 // This will be adjusted to hit exactly 180J
     };
 
-    const g = 0.5; // Gravity
-    const groundY = canvas.height - ball.radius - 20;
-    
-    // Calculate max potential energy for bar scaling
-    const initialHeight = groundY - 100;
-    const initialTotal = ball.mass * g * initialHeight;
+    function resetBall() {
+        const dropHeight = parseInt(hSlider.value);
+        ball.y = groundY - dropHeight;
+        ball.vy = 0;
+        ball.thermal = 0;
+        ball.restitution = parseFloat(eSlider.value);
+        
+        // Adjust mass so PE (mgh) = 180
+        // m = 180 / (g * h)
+        ball.mass = ENERGY_CAP / (g * dropHeight);
+        
+        hLabel.innerText = dropHeight;
+        eLabel.innerText = ball.restitution;
+    }
 
     function animate() {
-        // --- Physics: Velocity Verlet ---
-        // 1. Position Step
+        // Physics Step
         ball.y += ball.vy + 0.5 * g;
-        
-        // 2. Predict Velocity
         let vNext = ball.vy + 0.5 * g;
 
-        // 3. Collision Logic
         if (ball.y >= groundY) {
             ball.y = groundY;
-            
-            // Energy Math
             let keBefore = 0.5 * ball.mass * (vNext * vNext);
             ball.vy = -vNext * ball.restitution;
             let keAfter = 0.5 * ball.mass * (ball.vy * ball.vy);
-            
-            // Add lost KE to Thermal Energy
-            ball.thermal += (keBefore - keAfter);
+            ball.thermal += Math.max(0, keBefore - keAfter);
         } else {
             ball.vy += g;
         }
@@ -95,16 +132,16 @@
     function updateUI() {
         const pe = ball.mass * g * (groundY - ball.y);
         const ke = 0.5 * ball.mass * (ball.vy * ball.vy);
-        const mech = pe + ke;
-        const total = mech + ball.thermal;
-
-        document.getElementById('mechVal').innerText = mech.toFixed(0);
-        document.getElementById('thermVal').innerText = ball.thermal.toFixed(0);
-        document.getElementById('totalVal').innerText = total.toFixed(0);
-
-        // Update bar widths
-        document.getElementById('mechBar').style.width = (mech / total * 100) + "%";
-        document.getElementById('thermBar').style.width = (ball.thermal / total * 100) + "%";
+        const mech = Math.max(0, pe + ke);
+        
+        document.getElementById('mechVal').innerText = mech.toFixed(1);
+        document.getElementById('thermVal').innerText = ball.thermal.toFixed(1);
+        
+        document.getElementById('mechBar').style.width = (mech / ENERGY_CAP * 100) + "%";
+        document.getElementById('thermBar').style.width = (ball.thermal / ENERGY_CAP * 100) + "%";
+        
+        hLabel.innerText = hSlider.value;
+        eLabel.innerText = eSlider.value;
     }
 
     function render() {
@@ -114,9 +151,8 @@
         ctx.fillStyle = '#333';
         ctx.fillRect(0, groundY + ball.radius, canvas.width, 20);
 
-        // Ball Color Shift (Blue to Red)
-        const totalE = (ball.mass * g * (groundY - ball.y)) + (0.5 * ball.mass * ball.vy**2) + ball.thermal;
-        const heatRatio = ball.thermal / totalE;
+        // Ball Color Shift
+        const heatRatio = Math.min(ball.thermal / ENERGY_CAP, 1);
         const r = Math.floor(50 + (205 * heatRatio));
         const b = Math.floor(255 - (205 * heatRatio));
 
@@ -127,9 +163,9 @@
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.closePath();
     }
 
+    resetBall(); // Initial setup
     animate();
 </script>
 </body>
